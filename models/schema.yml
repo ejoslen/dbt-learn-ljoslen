@@ -1,0 +1,102 @@
+version: 2
+
+sources:
+  - name: jaffle_shop
+    database: raw
+    description: this is the raw jaffle_shop data
+    tables:
+
+      - name: orders
+        description: this is a log of orders made at the jaffle shop
+        loaded_at_field: _etl_loaded_at
+        freshness: 
+          warn_after: {count: 12, period: hour}
+          error_after: {count: 24, period: hour}
+        columns: 
+          - name: id
+            description: Primary Key - Order_ID
+            tests:
+              - not_null
+              - unique
+
+      - name: customers
+        description: this is a log of the jaffle shops customers
+        columns:
+          - name: id
+            description: Primary Key - Customer_ID
+            tests: 
+              - not_null
+              - unique
+
+  - name: stripe
+    database: raw
+    tables:
+      - name: payment
+        description: this is a log of payments made on orders
+
+models:
+  - name: customers
+    description: One record per customer with fields from orders
+    columns:
+      - name: customer_id
+        description: Primary key 
+        tests:
+          - unique
+          - not_null
+      - name: first_order_date
+        description: NULL when a customer has not yet placed an order
+
+  - name: stg_customers
+    description: This model cleans up customer date
+    columns:
+      - name: customer_id
+        description: Primary key
+        tests:
+          - unique
+          - not_null
+
+  - name: stg_orders
+    description: This model cleans up order date
+    columns:
+      - name: order_id
+        description: Primary key
+        tests:
+          - unique
+          - not_null
+      - name: status
+        tests:
+          - accepted_values:
+              values: ['placed', 'shipped', 'completed', 'return_pending', 'returned']
+      - name: customer_id
+        tests:
+          - not_null
+          - relationships:
+              to: ref('stg_customers')
+              field: customer_id
+
+  - name: orders
+    description: This model provides information on orders - one record per order
+    columns: 
+      - name: order_id
+        description: Primary key
+        tests:
+          - unique
+          - not_null
+      - name: status
+        description: "{{ doc ('order_status') }}"
+        tests:
+          - accepted_values: 
+              values: ['placed', 'shipped', 'completed', 'return_pending', 'returned']
+
+      - name: amount
+        description: Amount in USD
+
+  - name: stg_payments
+    description: This model cleans up the payments information
+    columns:
+      - name: order_id
+        description: Primary key
+        tests: 
+          - not_null
+      - name: amount
+        description: the amount is stored in cents, it is converted to dollars here
